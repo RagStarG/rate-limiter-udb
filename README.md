@@ -127,11 +127,3 @@ python -m unittest tests/test_rate_limiter.py -v
 
 ---
 
-## 6. Submission Details
-
-- **Author:** Suman Mondal
-- **Registration No.:** AU/2024/0000570
-- **Roll No.:** UG/SOET/30/24/148
-- **Semester:** 5th Sem, Sec: B
-- **Course:** Unstructured Database (UDB)
-- **Github Link:** `https://github.com/RagStarG/rate-limiter-udb`
