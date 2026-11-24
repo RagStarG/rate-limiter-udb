@@ -5,7 +5,7 @@
 **Roll No.:** UG/SOET/30/24/148  
 **Semester & Section:** 5th Semester, Section B  
 **Subject:** Unstructured Database (UDB Assignment)  
-**Repository / Github Link:** `https://github.com/SumanMondal-dev/rate-limiter-udb`
+**Repository / Github Link:** `https://github.com/RagStarG/rate-limiter-udb`
 
 ---
 
@@ -134,4 +134,4 @@ python -m unittest tests/test_rate_limiter.py -v
 - **Roll No.:** UG/SOET/30/24/148
 - **Semester:** 5th Sem, Sec: B
 - **Course:** Unstructured Database (UDB)
-- **Github Link:** `https://github.com/SumanMondal-dev/rate-limiter-udb`
+- **Github Link:** `https://github.com/RagStarG/rate-limiter-udb`

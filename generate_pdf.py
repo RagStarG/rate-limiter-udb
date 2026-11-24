@@ -683,7 +683,7 @@ def build_assignment_pdf(output_path="Suman_Mondal_UDB_Assignment.pdf"):
     pdf.draw_rect(pdf.left_margin, pdf.y - 42.0, 4.0, 42.0, fill_rgb=(0.10, 0.35, 0.65))
 
     pdf.draw_text("OFFICIAL REPOSITORY SUBMISSION:", pdf.left_margin + 14.0, pdf.y - 14.0, font="F2", size=8.0, rgb=(0.10, 0.25, 0.45))
-    github_str = "Github link: https://github.com/SumanMondal-dev/rate-limiter-udb"
+    github_str = "Github link: https://github.com/RagStarG/rate-limiter-udb"
     pdf.draw_text(github_str, pdf.left_margin + 14.0, pdf.y - 28.0, font="F2", size=9.5, rgb=(0.08, 0.32, 0.65))
     pdf.y -= 50.0
 
@@ -696,7 +696,7 @@ def build_assignment_pdf(output_path="Suman_Mondal_UDB_Assignment.pdf"):
         ["Academic Year / Semester", "5th Semester, Section B (2026)"],
         ["Subject", "Unstructured Database (UDB Assignment)"],
         ["Watermark Verified", "YES: Watermarked with student name & registration on every page"],
-        ["Backend Repository", "Github link: https://github.com/SumanMondal-dev/rate-limiter-udb"],
+        ["Backend Repository", "Github link: https://github.com/RagStarG/rate-limiter-udb"],
     ]
     pdf.add_table(s_headers, s_rows, [160.0, 345.28])
 

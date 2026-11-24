@@ -656,7 +656,7 @@ def generate_human_academic_pdf(output_path="Suman_Mondal_UDB_Assignment.pdf"):
     pdf.check_space(40.0)
     pdf.draw_rect(pdf.left_margin, pdf.y - 32.0, pdf.usable_width, 32.0, fill_rgb=(0.97, 0.97, 0.97), stroke_rgb=(0.4, 0.4, 0.4), line_width=0.75)
     pdf.draw_text("Official Code Submission Repository:", pdf.left_margin + 10.0, pdf.y - 12.0, font="F2", size=8.5, rgb=(0.2, 0.2, 0.2))
-    pdf.draw_text("Github link: https://github.com/SumanMondal-dev/rate-limiter-udb", pdf.left_margin + 10.0, pdf.y - 24.0, font="F2", size=9.5, rgb=(0.0, 0.0, 0.6))
+    pdf.draw_text("Github link: https://github.com/RagStarG/rate-limiter-udb", pdf.left_margin + 10.0, pdf.y - 24.0, font="F2", size=9.5, rgb=(0.0, 0.0, 0.6))
     pdf.y -= 44.0
 
     # Final Student Sign-off Table
@@ -668,7 +668,7 @@ def generate_human_academic_pdf(output_path="Suman_Mondal_UDB_Assignment.pdf"):
         ["Semester & Section", "5th Semester, Section B"],
         ["Subject", "Unstructured Database (UDB Assignment)"],
         ["Watermark Check", "Watermarked with student name & registration across every page"],
-        ["Code Repository", "Github link: https://github.com/SumanMondal-dev/rate-limiter-udb"],
+        ["Code Repository", "Github link: https://github.com/RagStarG/rate-limiter-udb"],
     ]
     pdf.add_table(s_headers, s_rows, [140.0, 347.28])
 
