@@ -1,12 +1,5 @@
 # Distributed Rate Limiter Backend using Unstructured Database Data Model
 
-**Student Name:** Suman Mondal  
-**Registration No.:** AU/2024/0000570  
-**Roll No.:** UG/SOET/30/24/148  
-**Semester & Section:** 5th Semester, Section B  
-**Subject:** Unstructured Database (UDB Assignment)  
-**Repository / Github Link:** `https://github.com/RagStarG/rate-limiter-udb`
-
 ---
 
 ## 1. Project Overview
