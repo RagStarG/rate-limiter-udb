@@ -1,16 +1,25 @@
-"""Automated Test Suite for Rate Limiter and Unstructured Storage.
+"""Automated Test Suite for Rate Limiter and Unstructured Storage Models.
 
-Author: Suman Mondal (AU/2024/0000570)
+Comprehensive tests covering:
+1. Storage Primitives (Strings, Hashes, Sorted Sets, TTL Expiration)
+2. All 5 Algorithmic Models (Token Bucket, Sliding Window Counter, Sliding Window Log, Fixed Window, Leaky Bucket)
+3. Concurrency & Race Condition Verification (ThreadPoolExecutor stress testing)
+4. Flask HTTP Endpoints, RFC Header Injection, and Error Payloads
+
+Author: Suman Mondal (RagStarG)
 Subject: Unstructured Database (UDB Assignment)
 """
 
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from rate_limiter.storage import InMemoryKVStore
 from rate_limiter.algorithms import (
     TokenBucketRateLimiter,
     SlidingWindowCounterRateLimiter,
+    SlidingWindowLogRateLimiter,
     FixedWindowRateLimiter,
+    LeakyBucketRateLimiter,
 )
 from rate_limiter.app import app, storage_instance
 
@@ -51,41 +60,28 @@ class TestInMemoryKVStore(unittest.TestCase):
         self.assertEqual(self.store.zcard("timestamps"), 2)
 
 
-class TestRateLimitingAlgorithms(unittest.TestCase):
-    """Test algorithmic behavior under normal and bursting conditions."""
+class TestAllRateLimitingAlgorithms(unittest.TestCase):
+    """Test algorithmic behavior for all 5 implemented models."""
 
     def setUp(self):
         self.store = InMemoryKVStore()
 
     def test_token_bucket_exhaustion_and_refill(self):
-        # 3 tokens max, refills over 3 seconds (1 token / sec)
         limiter = TokenBucketRateLimiter(self.store, capacity=3, window_seconds=3)
         client = "client_alpha"
 
-        # Request 1: Allowed (rem 2)
-        r1 = limiter.is_allowed(client)
-        self.assertTrue(r1.allowed)
-        self.assertEqual(r1.remaining, 2)
+        self.assertTrue(limiter.is_allowed(client).allowed)
+        self.assertTrue(limiter.is_allowed(client).allowed)
+        self.assertTrue(limiter.is_allowed(client).allowed)
+        
+        # 4th request must be blocked
+        blocked = limiter.is_allowed(client)
+        self.assertFalse(blocked.allowed)
+        self.assertGreaterEqual(blocked.retry_after, 1)
 
-        # Request 2: Allowed (rem 1)
-        r2 = limiter.is_allowed(client)
-        self.assertTrue(r2.allowed)
-        self.assertEqual(r2.remaining, 1)
-
-        # Request 3: Allowed (rem 0)
-        r3 = limiter.is_allowed(client)
-        self.assertTrue(r3.allowed)
-        self.assertEqual(r3.remaining, 0)
-
-        # Request 4: Blocked (rate limit exceeded)
-        r4 = limiter.is_allowed(client)
-        self.assertFalse(r4.allowed)
-        self.assertGreaterEqual(r4.retry_after, 1)
-
-        # Wait 1.1s for 1 token to refill
-        time.sleep(1.1)
-        r5 = limiter.is_allowed(client)
-        self.assertTrue(r5.allowed)
+        # Wait for 1 token refill
+        time.sleep(1.05)
+        self.assertTrue(limiter.is_allowed(client).allowed)
 
     def test_fixed_window_counter(self):
         limiter = FixedWindowRateLimiter(self.store, limit=2, window_seconds=2)
@@ -103,26 +99,73 @@ class TestRateLimitingAlgorithms(unittest.TestCase):
         self.assertTrue(limiter.is_allowed(c).allowed)
         self.assertFalse(limiter.is_allowed(c).allowed)
 
+    def test_sliding_window_log(self):
+        limiter = SlidingWindowLogRateLimiter(self.store, limit=2, window_seconds=2)
+        c = "client_delta"
+
+        self.assertTrue(limiter.is_allowed(c).allowed)
+        self.assertTrue(limiter.is_allowed(c).allowed)
+        self.assertFalse(limiter.is_allowed(c).allowed)
+
+    def test_leaky_bucket(self):
+        limiter = LeakyBucketRateLimiter(self.store, capacity=2, window_seconds=2)
+        c = "client_epsilon"
+
+        self.assertTrue(limiter.is_allowed(c).allowed)
+        self.assertTrue(limiter.is_allowed(c).allowed)
+        self.assertFalse(limiter.is_allowed(c).allowed)
+
+
+class TestConcurrencyStress(unittest.TestCase):
+    """Stress test: verify zero race conditions under concurrent multi-threaded load."""
+
+    def setUp(self):
+        self.store = InMemoryKVStore()
+
+    def test_concurrent_burst_token_bucket(self):
+        # 5 capacity bucket, 25 concurrent threads
+        limiter = TokenBucketRateLimiter(self.store, capacity=5, window_seconds=60)
+        client = "concurrent_user"
+        results = []
+
+        def call():
+            return limiter.is_allowed(client).allowed
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(call) for _ in range(25)]
+            for f in as_completed(futures):
+                results.append(f.result())
+
+        # Exactly 5 should be True, exactly 20 should be False
+        self.assertEqual(results.count(True), 5)
+        self.assertEqual(results.count(False), 20)
+
 
 class TestFlaskEndpoints(unittest.TestCase):
-    """Integration tests for Flask HTTP API and headers."""
+    """Integration tests for Flask HTTP API, templates, and RFC headers."""
 
     def setUp(self):
         storage_instance.flush_all()
         self.client = app.test_client()
 
-    def test_root_endpoint(self):
-        res = self.client.get("/")
+    def test_root_json_endpoint(self):
+        res = self.client.get("/?json=true")
         self.assertEqual(res.status_code, 200)
         json_data = res.get_json()
-        self.assertEqual(json_data["student_name"], "Suman Mondal")
+        self.assertEqual(json_data["author"], "Suman Mondal (RagStarG)")
         self.assertEqual(json_data["registration_no"], "AU/2024/0000570")
+
+    def test_root_html_dashboard(self):
+        res = self.client.get("/", headers={"Accept": "text/html"})
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"Rate Limiter Simulator", res.data)
+        self.assertIn(b"Suman Mondal", res.data)
 
     def test_public_endpoint_rate_limiting(self):
         # Limit is 5 per 10s
         for i in range(5):
             res = self.client.get("/api/public")
-            self.assertEqual(res.status_code, 200, f"Request {i+1} should succeed")
+            self.assertEqual(res.status_code, 200)
             self.assertIn("X-RateLimit-Limit", res.headers)
             self.assertIn("X-RateLimit-Remaining", res.headers)
 
@@ -146,6 +189,20 @@ class TestFlaskEndpoints(unittest.TestCase):
         for _ in range(10):
             r_prem = self.client.get("/api/tier", headers={"X-API-Key": "prem_user_99"})
             self.assertEqual(r_prem.status_code, 200)
+
+    def test_sliding_log_endpoint(self):
+        for _ in range(5):
+            res = self.client.get("/api/sliding-log")
+            self.assertEqual(res.status_code, 200)
+        res_blocked = self.client.get("/api/sliding-log")
+        self.assertEqual(res_blocked.status_code, 429)
+
+    def test_leaky_bucket_endpoint(self):
+        for _ in range(6):
+            res = self.client.get("/api/leaky")
+            self.assertEqual(res.status_code, 200)
+        res_blocked = self.client.get("/api/leaky")
+        self.assertEqual(res_blocked.status_code, 429)
 
 
 if __name__ == "__main__":

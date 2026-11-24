@@ -1,14 +1,62 @@
 """Storage layer abstraction for rate limiting state.
 Implements an Unstructured Key-Value / Hash / Sorted-Set data model.
 
-Author: Suman Mondal (AU/2024/0000570)
+Supports:
+1. Live Redis Backend (with atomic Redis Lua scripts)
+2. Thread-Safe In-Memory KV Store (for zero-dependency local runs and tests)
+
+Author: Suman Mondal (RagStarG)
 Subject: Unstructured Database (UDB Assignment)
 """
 
+import os
 import time
+import math
+import logging
 import threading
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, Any, List, Tuple
+
+logger = logging.getLogger(__name__)
+
+# Atomic Redis Lua script for Token Bucket evaluation
+# Guarantees zero race conditions across distributed microservices
+REDIS_TOKEN_BUCKET_LUA = """
+local key = KEYS[1]
+local capacity = tonumber(ARGV[1])
+local refill_rate = tonumber(ARGV[2])
+local now = tonumber(ARGV[3])
+local ttl = tonumber(ARGV[4])
+
+local state = redis.call('HMGET', key, 'tokens', 'last_refill')
+local stored_tokens = tonumber(state[1])
+local last_refill = tonumber(state[2])
+
+local current_tokens
+if not stored_tokens or not last_refill then
+    current_tokens = capacity - 1.0
+    last_refill = now
+    redis.call('HMSET', key, 'tokens', tostring(current_tokens), 'last_refill', tostring(last_refill))
+    redis.call('EXPIRE', key, ttl)
+    return {1, tostring(current_tokens), tostring(0)}
+end
+
+local elapsed = math.max(0, now - last_refill)
+current_tokens = math.min(capacity, stored_tokens + (elapsed * refill_rate))
+
+if current_tokens >= 1.0 then
+    local remaining = current_tokens - 1.0
+    redis.call('HMSET', key, 'tokens', tostring(remaining), 'last_refill', tostring(now))
+    redis.call('EXPIRE', key, ttl)
+    return {1, tostring(remaining), tostring(0)}
+else
+    local needed = (1.0 - current_tokens) / refill_rate
+    local retry_after = math.max(1, math.ceil(needed))
+    redis.call('HMSET', key, 'tokens', tostring(current_tokens), 'last_refill', tostring(now))
+    redis.call('EXPIRE', key, ttl)
+    return {0, tostring(current_tokens), tostring(retry_after)}
+end
+"""
 
 
 class StorageBackend(ABC):
@@ -58,6 +106,10 @@ class StorageBackend(ABC):
     def flush_all(self) -> None:
         pass
 
+    @abstractmethod
+    def get_backend_name(self) -> str:
+        pass
+
 
 class InMemoryKVStore(StorageBackend):
     """Thread-safe, high-performance in-memory unstructured store.
@@ -71,6 +123,9 @@ class InMemoryKVStore(StorageBackend):
         self._data: Dict[str, Any] = {}
         self._types: Dict[str, str] = {}  # 'string', 'hash', 'zset'
         self._expires: Dict[str, float] = {}
+
+    def get_backend_name(self) -> str:
+        return "InMemoryKVStore (Thread-Safe)"
 
     def _purge_if_expired(self, key: str) -> bool:
         """Internal helper to remove key if TTL has elapsed (lazy eviction)."""
@@ -187,3 +242,93 @@ class InMemoryKVStore(StorageBackend):
             self._data.clear()
             self._types.clear()
             self._expires.clear()
+
+
+class RedisBackend(StorageBackend):
+    """Production Redis Backend implementing Redis unstructured primitives and Lua scripting."""
+
+    def __init__(self, redis_client):
+        self.client = redis_client
+        self._tb_lua = self.client.register_script(REDIS_TOKEN_BUCKET_LUA)
+
+    def get_backend_name(self) -> str:
+        return "Redis (Remote NoSQL Engine)"
+
+    def eval_token_bucket(self, key: str, capacity: float, refill_rate: float, now: float, ttl: int):
+        """Execute atomic Redis Lua script for Token Bucket."""
+        res = self._tb_lua(keys=[key], args=[capacity, refill_rate, now, ttl])
+        allowed = bool(int(res[0]))
+        remaining = float(res[1])
+        retry_after = int(res[2])
+        return allowed, remaining, retry_after
+
+    def get(self, key: str) -> Optional[str]:
+        val = self.client.get(key)
+        return val.decode("utf-8") if isinstance(val, bytes) else (str(val) if val is not None else None)
+
+    def set(self, key: str, value: str, ttl_seconds: Optional[float] = None) -> bool:
+        if ttl_seconds and ttl_seconds > 0:
+            return bool(self.client.set(key, str(value), ex=int(math.ceil(ttl_seconds))))
+        return bool(self.client.set(key, str(value)))
+
+    def incr(self, key: str, amount: int = 1, ttl_seconds: Optional[float] = None) -> int:
+        pipe = self.client.pipeline()
+        pipe.incrby(key, amount)
+        if ttl_seconds and ttl_seconds > 0:
+            pipe.expire(key, int(math.ceil(ttl_seconds)))
+        results = pipe.execute()
+        return int(results[0])
+
+    def expire(self, key: str, ttl_seconds: float) -> bool:
+        return bool(self.client.expire(key, int(math.ceil(ttl_seconds))))
+
+    def hgetall(self, key: str) -> Dict[str, str]:
+        raw = self.client.hgetall(key)
+        return {
+            (k.decode() if isinstance(k, bytes) else str(k)): (v.decode() if isinstance(v, bytes) else str(v))
+            for k, v in raw.items()
+        }
+
+    def hset(self, key: str, mapping: Dict[str, str], ttl_seconds: Optional[float] = None) -> bool:
+        pipe = self.client.pipeline()
+        pipe.hset(key, mapping=mapping)
+        if ttl_seconds and ttl_seconds > 0:
+            pipe.expire(key, int(math.ceil(ttl_seconds)))
+        pipe.execute()
+        return True
+
+    def zadd(self, key: str, mapping: Dict[str, float], ttl_seconds: Optional[float] = None) -> int:
+        pipe = self.client.pipeline()
+        pipe.zadd(key, mapping)
+        if ttl_seconds and ttl_seconds > 0:
+            pipe.expire(key, int(math.ceil(ttl_seconds)))
+        res = pipe.execute()
+        return int(res[0])
+
+    def zremrangebyscore(self, key: str, min_score: float, max_score: float) -> int:
+        return int(self.client.zremrangebyscore(key, min_score, max_score))
+
+    def zcard(self, key: str) -> int:
+        return int(self.client.zcard(key))
+
+    def delete(self, key: str) -> bool:
+        return bool(self.client.delete(key))
+
+    def flush_all(self) -> None:
+        self.client.flushdb()
+
+
+def create_storage_backend(redis_url: Optional[str] = None) -> StorageBackend:
+    """Factory creating RedisBackend if Redis is available, else falling back to InMemoryKVStore."""
+    url = redis_url or os.environ.get("REDIS_URL")
+    if url:
+        try:
+            import redis
+            client = redis.from_url(url, decode_responses=False, socket_timeout=1.5)
+            client.ping()
+            logger.info("Connected to Redis backend at %s", url)
+            return RedisBackend(client)
+        except Exception as e:
+            logger.warning("Redis connection failed (%s). Falling back to InMemoryKVStore.", e)
+            return InMemoryKVStore()
+    return InMemoryKVStore()

@@ -1,23 +1,25 @@
 """Flask Middleware and Route Decorators for Rate Limiting.
 
-Author: Suman Mondal (AU/2024/0000570)
+Author: Suman Mondal (RagStarG)
 Subject: Unstructured Database (UDB Assignment)
 """
 
 from functools import wraps
 from typing import Callable, Optional
-from flask import request, jsonify, make_response, Response
-from .storage import StorageBackend, InMemoryKVStore
+from flask import request, jsonify, make_response
+from .storage import StorageBackend, create_storage_backend
 from .algorithms import (
     BaseRateLimiter,
     TokenBucketRateLimiter,
     SlidingWindowCounterRateLimiter,
+    SlidingWindowLogRateLimiter,
     FixedWindowRateLimiter,
+    LeakyBucketRateLimiter,
     RateLimitResult,
 )
 
-# Global default store
-_default_storage = InMemoryKVStore()
+# Global default store (auto-detects Redis or falls back to in-memory)
+_default_storage = create_storage_backend()
 
 
 def get_client_identifier() -> str:
@@ -62,12 +64,16 @@ class RateLimitMiddleware:
     ) -> BaseRateLimiter:
         key = f"{endpoint_name}:{algorithm}:{limit}:{window_seconds}"
         if key not in self._limiters:
-            if algorithm == "token_bucket":
+            if algorithm in ("token_bucket", "tb"):
                 limiter = TokenBucketRateLimiter(self.storage, limit, window_seconds)
-            elif algorithm == "sliding_window":
+            elif algorithm in ("sliding_window", "sliding_window_counter", "swc"):
                 limiter = SlidingWindowCounterRateLimiter(self.storage, limit, window_seconds)
-            elif algorithm == "fixed_window":
+            elif algorithm in ("sliding_window_log", "swl"):
+                limiter = SlidingWindowLogRateLimiter(self.storage, limit, window_seconds)
+            elif algorithm in ("fixed_window", "fwc"):
                 limiter = FixedWindowRateLimiter(self.storage, limit, window_seconds)
+            elif algorithm in ("leaky_bucket", "lb"):
+                limiter = LeakyBucketRateLimiter(self.storage, limit, window_seconds)
             else:
                 raise ValueError(f"Unknown rate limiter algorithm: {algorithm}")
             self._limiters[key] = limiter
@@ -107,6 +113,7 @@ def rate_limit(
                             "status": "error",
                             "error": "Too Many Requests",
                             "message": f"Rate limit exceeded. Maximum {result.limit} requests per {window_seconds}s.",
+                            "algorithm": result.algorithm,
                             "limit": result.limit,
                             "remaining": 0,
                             "retry_after_seconds": result.retry_after,
@@ -127,6 +134,7 @@ def rate_limit(
             response.headers["X-RateLimit-Limit"] = str(result.limit)
             response.headers["X-RateLimit-Remaining"] = str(result.remaining)
             response.headers["X-RateLimit-Reset"] = str(result.reset_epoch)
+            response.headers["X-RateLimit-Algorithm"] = result.algorithm
             return response
 
         return wrapper

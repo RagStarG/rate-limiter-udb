@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rate Limiter Dashboard | Unstructured Database</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @keyframes pulse-red {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.85; transform: scale(1.02); }
+    }
+    .blocked-pulse { animation: pulse-red 1s infinite; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
+  
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <i class="fa-solid fa-gauge-high text-white text-lg"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+            Rate Limiter Simulator
+          </h1>
+          <p class="text-xs text-slate-400">Unstructured Database (UDB) Architecture</p>
+        </div>
+      </div>
+      
+      <div class="flex items-center space-x-3">
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span class="w-2 h-2 mr-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          Engine: {{ storage_name }}
+        </span>
+        <a href="https://github.com/RagStarG/rate-limiter-udb" target="_blank" class="text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-brands fa-github"></i>
+          <span>RagStarG</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 py-8 space-y-8">
+    
+    <!-- Hero / Student Info Banner -->
+    <div class="bg-gradient-to-r from-slate-900 via-slate-900/90 to-blue-950/40 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+      <div class="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <span class="text-xs uppercase font-semibold text-cyan-400 tracking-wider">Course: Unstructured Database (UDB)</span>
+          <h2 class="text-2xl font-extrabold text-white mt-1">High-Throughput Distributed Rate Limiter</h2>
+          <p class="text-sm text-slate-400 mt-1 max-w-2xl">
+            Simulates atomic rate-limiting algorithms backed by an Unstructured Key-Value / Hash Data Model with sub-millisecond evaluation and automatic TTL eviction.
+          </p>
+        </div>
+        <div class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-3 text-xs space-y-1 min-w-[240px]">
+          <div class="flex justify-between"><span class="text-slate-400">Student:</span> <span class="font-semibold text-white">Suman Mondal</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Reg No:</span> <span class="font-mono text-cyan-300">AU/2024/0000570</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Roll No:</span> <span class="font-mono text-cyan-300">UG/SOET/30/24/148</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Semester:</span> <span class="text-white">5th Sem, Sec: B</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Simulator Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      
+      <!-- Left Column: Controls & Configuration -->
+      <div class="space-y-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-5">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-cyan-400"></i> Simulator Controls
+          </h3>
+
+          <!-- Algorithm Selection -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-2">Algorithm</label>
+            <select id="algoSelect" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+              <option value="token_bucket" selected>Token Bucket (Hash + Lazy Refill)</option>
+              <option value="sliding_window">Sliding Window Counter (Weighted)</option>
+              <option value="sliding_log">Sliding Window Log (Sorted Set ZSET)</option>
+              <option value="fixed_window">Fixed Window Counter (TTL Integer)</option>
+              <option value="leaky_bucket">Leaky Bucket (FIFO Constant Outflow)</option>
+            </select>
+          </div>
+
+          <!-- Client Identity / Tier -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-2">Client Tier / Identification</label>
+            <select id="clientTierSelect" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+              <option value="public_ip" selected>Public Client (IP-based: 5 req / 10s)</option>
+              <option value="free_key">Free Tier API Key (5 req / min)</option>
+              <option value="prem_key">Premium Tier API Key (20 req / min)</option>
+            </select>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="space-y-2 pt-2">
+            <button id="btnSendOne" class="w-full py-2.5 px-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-cyan-600/20 active:scale-[0.98] transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-paper-plane"></i> Send 1 Request
+            </button>
+            <div class="grid grid-cols-2 gap-2">
+              <button id="btnSendBurst" class="py-2 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl active:scale-[0.98] transition flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-bolt text-amber-400"></i> Burst (5)
+              </button>
+              <button id="btnSendFlood" class="py-2 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl active:scale-[0.98] transition flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-fire text-rose-400"></i> Flood (15)
+              </button>
+            </div>
+            <button id="btnResetDB" class="w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-arrows-rotate"></i> Reset Storage State
+            </button>
+          </div>
+        </div>
+
+        <!-- Metrics Summary Card -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+          <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Live Session Metrics</h4>
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/50">
+              <div class="text-xs text-slate-400">Total</div>
+              <div id="statTotal" class="text-lg font-bold text-white mt-0.5">0</div>
+            </div>
+            <div class="bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20">
+              <div class="text-xs text-emerald-400">200 OK</div>
+              <div id="statAllowed" class="text-lg font-bold text-emerald-400 mt-0.5">0</div>
+            </div>
+            <div class="bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
+              <div class="text-xs text-rose-400">429 Blocked</div>
+              <div id="statBlocked" class="text-lg font-bold text-rose-400 mt-0.5">0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Middle Column: Visual Bucket & Live Response Monitor -->
+      <div class="lg:col-span-2 space-y-6">
+        
+        <!-- Live Visual Bucket Gauge -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg">
+          <div class="flex justify-between items-center mb-4">
+            <div>
+              <h3 class="text-base font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-chart-pie text-cyan-400"></i> Quota & Token Meter
+              </h3>
+              <p class="text-xs text-slate-400" id="quotaDesc">Tracking quota capacity and lazy replenishment</p>
+            </div>
+            <div id="statusBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700">
+              STANDBY
+            </div>
+          </div>
+
+          <!-- Capacity Bar -->
+          <div class="space-y-2">
+            <div class="flex justify-between text-xs text-slate-300">
+              <span>Quota Remaining: <span id="remCount" class="font-bold text-cyan-300">-</span> / <span id="limitCount">-</span></span>
+              <span id="percentText" class="font-mono text-slate-400">100%</span>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-4 overflow-hidden p-0.5 border border-slate-700">
+              <div id="progressBar" class="bg-gradient-to-r from-emerald-500 to-cyan-500 h-full rounded-full transition-all duration-300" style="width: 100%;"></div>
+            </div>
+          </div>
+
+          <!-- Retry Countdown Pill (Hidden by default) -->
+          <div id="retryBanner" class="hidden mt-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs flex items-center justify-between blocked-pulse">
+            <span class="flex items-center gap-2 font-medium">
+              <i class="fa-solid fa-triangle-exclamation"></i> Rate Limit Exceeded! Backing off...
+            </span>
+            <span class="font-mono font-bold bg-rose-900/50 px-2.5 py-1 rounded-md border border-rose-500/40">
+              Retry in <span id="retrySec">0</span>s
+            </span>
+          </div>
+
+          <!-- Live Headers Inspector Table -->
+          <div class="mt-6 border-t border-slate-800 pt-4">
+            <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">RFC HTTP Response Headers</h4>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+              <div class="bg-slate-800/80 p-2 rounded-lg border border-slate-700">
+                <div class="text-[10px] text-slate-400 uppercase">X-RateLimit-Limit</div>
+                <div id="hdrLimit" class="text-white font-bold mt-0.5">-</div>
+              </div>
+              <div class="bg-slate-800/80 p-2 rounded-lg border border-slate-700">
+                <div class="text-[10px] text-slate-400 uppercase">X-RateLimit-Remaining</div>
+                <div id="hdrRemaining" class="text-white font-bold mt-0.5">-</div>
+              </div>
+              <div class="bg-slate-800/80 p-2 rounded-lg border border-slate-700">
+                <div class="text-[10px] text-slate-400 uppercase">X-RateLimit-Reset</div>
+                <div id="hdrReset" class="text-white font-bold mt-0.5">-</div>
+              </div>
+              <div class="bg-slate-800/80 p-2 rounded-lg border border-slate-700">
+                <div class="text-[10px] text-slate-400 uppercase">Retry-After</div>
+                <div id="hdrRetry" class="text-white font-bold mt-0.5">0s</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Unstructured Database Inspector -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg">
+          <div class="flex justify-between items-center mb-3">
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-database text-cyan-400"></i> Unstructured Database State
+            </h3>
+            <span class="text-xs font-mono text-slate-400">Key: <span id="dbKeyDisplay" class="text-cyan-300">-</span></span>
+          </div>
+          <pre id="dbStateDisplay" class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-emerald-400 overflow-x-auto max-h-40">
+// Waiting for first request...
+          </pre>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- API Reference Cards -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-4">
+      <h3 class="text-base font-bold text-white flex items-center gap-2">
+        <i class="fa-solid fa-terminal text-cyan-400"></i> RESTful API Endpoints Specification
+      </h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+        <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300">GET</span>
+          <div class="font-mono text-white font-semibold mt-1">/api/public</div>
+          <p class="text-slate-400 mt-1">Token Bucket rate limited: 5 requests / 10s based on caller IP.</p>
+        </div>
+        <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300">GET</span>
+          <div class="font-mono text-white font-semibold mt-1">/api/sliding</div>
+          <p class="text-slate-400 mt-1">Sliding Window Counter: 8 requests / 20s weighted approximation.</p>
+        </div>
+        <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300">GET</span>
+          <div class="font-mono text-white font-semibold mt-1">/api/tier</div>
+          <p class="text-slate-400 mt-1">Tier-based via X-API-Key: Free (5 req/m) vs Premium (20 req/m).</p>
+        </div>
+        <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300">POST</span>
+          <div class="font-mono text-white font-semibold mt-1">/api/reset</div>
+          <p class="text-slate-400 mt-1">Flushes internal unstructured database store for testing.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    let totalRequests = 0;
+    let allowedRequests = 0;
+    let blockedRequests = 0;
+    let retryInterval = null;
+
+    function getSelectedEndpointAndHeaders() {
+      const algo = document.getElementById("algoSelect").value;
+      const tier = document.getElementById("clientTierSelect").value;
+      
+      let url = "/api/public";
+      let headers = {};
+
+      if (algo === "sliding_window") {
+        url = "/api/sliding";
+      } else if (algo === "token_bucket" && tier !== "public_ip") {
+        url = "/api/tier";
+      }
+
+      if (tier === "free_key") {
+        headers["X-API-Key"] = "free_user_1";
+      } else if (tier === "prem_key") {
+        headers["X-API-Key"] = "prem_gold_99";
+      }
+
+      return { url, headers, algo, tier };
+    }
+
+    async function sendRequest() {
+      const { url, headers } = getSelectedEndpointAndHeaders();
+      totalRequests++;
+      document.getElementById("statTotal").innerText = totalRequests;
+
+      try {
+        const resp = await fetch(url, { headers });
+        const limit = resp.headers.get("X-RateLimit-Limit") || "-";
+        const rem = resp.headers.get("X-RateLimit-Remaining") || "0";
+        const reset = resp.headers.get("X-RateLimit-Reset") || "-";
+        const retryAfter = resp.headers.get("Retry-After") || "0";
+
+        document.getElementById("hdrLimit").innerText = limit;
+        document.getElementById("hdrRemaining").innerText = rem;
+        document.getElementById("hdrReset").innerText = reset;
+        document.getElementById("hdrRetry").innerText = retryAfter + "s";
+
+        const badge = document.getElementById("statusBadge");
+        const retryBanner = document.getElementById("retryBanner");
+
+        if (resp.status === 200) {
+          allowedRequests++;
+          document.getElementById("statAllowed").innerText = allowedRequests;
+          badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+          badge.innerText = "200 OK (ALLOWED)";
+          retryBanner.classList.add("hidden");
+          if (retryInterval) clearInterval(retryInterval);
+        } else {
+          blockedRequests++;
+          document.getElementById("statBlocked").innerText = blockedRequests;
+          badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 blocked-pulse";
+          badge.innerText = "429 TOO MANY REQUESTS";
+
+          const retrySec = parseInt(retryAfter, 10) || 1;
+          document.getElementById("retrySec").innerText = retrySec;
+          retryBanner.classList.remove("hidden");
+
+          if (retryInterval) clearInterval(retryInterval);
+          let countdown = retrySec;
+          retryInterval = setInterval(() => {
+            countdown--;
+            if (countdown <= 0) {
+              clearInterval(retryInterval);
+              retryBanner.classList.add("hidden");
+            } else {
+              document.getElementById("retrySec").innerText = countdown;
+            }
+          }, 1000);
+        }
+
+        // Update progress bar
+        if (limit !== "-") {
+          const lNum = parseInt(limit, 10);
+          const rNum = parseInt(rem, 10);
+          const pct = Math.max(0, Math.min(100, Math.round((rNum / lNum) * 100)));
+          document.getElementById("remCount").innerText = rem;
+          document.getElementById("limitCount").innerText = limit;
+          document.getElementById("percentText").innerText = pct + "%";
+          const pBar = document.getElementById("progressBar");
+          pBar.style.width = pct + "%";
+
+          if (pct > 50) {
+            pBar.className = "bg-gradient-to-r from-emerald-500 to-cyan-500 h-full rounded-full transition-all duration-300";
+          } else if (pct > 20) {
+            pBar.className = "bg-gradient-to-r from-amber-500 to-yellow-500 h-full rounded-full transition-all duration-300";
+          } else {
+            pBar.className = "bg-gradient-to-r from-rose-600 to-red-500 h-full rounded-full transition-all duration-300";
+          }
+        }
+
+        // Fetch DB Inspector stats
+        updateDBState();
+
+      } catch (err) {
+        console.error("Request failed:", err);
+      }
+    }
+
+    async function updateDBState() {
+      try {
+        const stats = await fetch("/api/stats/client").then(r => r.json());
+        document.getElementById("dbKeyDisplay").innerText = "rl:tb:public_endpoint:ip:127.0.0.1";
+        document.getElementById("dbStateDisplay").innerText = JSON.stringify(stats, null, 2);
+      } catch (e) {}
+    }
+
+    // Button event listeners
+    document.getElementById("btnSendOne").addEventListener("click", () => sendRequest());
+    
+    document.getElementById("btnSendBurst").addEventListener("click", async () => {
+      for (let i = 0; i < 5; i++) {
+        sendRequest();
+        await new Promise(r => setTimeout(r, 80));
+      }
+    });
+
+    document.getElementById("btnSendFlood").addEventListener("click", async () => {
+      for (let i = 0; i < 15; i++) {
+        sendRequest();
+        await new Promise(r => setTimeout(r, 40));
+      }
+    });
+
+    document.getElementById("btnResetDB").addEventListener("click", async () => {
+      await fetch("/api/reset", { method: "POST" });
+      totalRequests = 0;
+      allowedRequests = 0;
+      blockedRequests = 0;
+      document.getElementById("statTotal").innerText = "0";
+      document.getElementById("statAllowed").innerText = "0";
+      document.getElementById("statBlocked").innerText = "0";
+      document.getElementById("statusBadge").className = "px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700";
+      document.getElementById("statusBadge").innerText = "STANDBY";
+      document.getElementById("retryBanner").classList.add("hidden");
+      document.getElementById("progressBar").style.width = "100%";
+      document.getElementById("remCount").innerText = "-";
+      document.getElementById("limitCount").innerText = "-";
+      document.getElementById("percentText").innerText = "100%";
+      updateDBState();
+    });
+
+    // Initial load
+    updateDBState();
+  </script>
+</body>
+</html>
